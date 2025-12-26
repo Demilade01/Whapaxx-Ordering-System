@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Whapaxx — Admin Control</title>
+<style>
+  :root{
+    --bg:#0b1247; --panel:#151c6e; --text:#fff; --muted:#c7c9e0;
+    --accent:#e52b39; --accent-hover:#c0212c; --accent-border:#951821;
+    --border:#2b3297; --soft:rgba(255,255,255,.06); --softB:rgba(255,255,255,.08);
+    --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.25);
+    --input-bg:#ffffff; --input-text:#0b1247; --input-border:#d6daf6;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; color:var(--text);
+    background:radial-gradient(1200px 600px at 10% -10%, #16217a 0%, #0b1247 60%), #0b1247;
+    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    padding:16px;
+  }
+  .wrap{max-width:980px;margin:0 auto;display:grid;gap:16px}
+  h1{margin:4px 0 2px;font-size:1.4rem}
+  .sub{color:var(--muted)}
+
+  /* Tabs */
+  .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .tab{
+    padding:12px 16px;border-radius:999px;border:1px solid var(--border);
+    background:#141a69;color:#fff;cursor:pointer;font-weight:800;font-size:16px;min-height:44px
+  }
+  .tab.active{background:var(--accent);border-color:var(--accent-border)}
+
+  .card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+
+  /* ===== Opening Hours (clean, single column) ===== */
+  .statusRow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .badge{
+    display:inline-flex;align-items:center;gap:8px;background:#1a216f;border:1px solid var(--border);
+    padding:10px 14px;border-radius:999px;font-weight:800;min-height:44px
+  }
+  .ok{background:#115e59;border-color:#0b4a45}
+  .warn{background:#8a1e1e;border-color:#5d1212}
+  .ghost{
+    background:transparent;border:1px dashed #5760d6;color:#cbd0ff;border-radius:12px;
+    padding:10px 14px;font-weight:800;cursor:pointer;font-size:16px;min-height:44px
+  }
+
+  .hoursList{display:flex;flex-direction:column;gap:18px}
+  .dayCard{
+    background:var(--soft);border:1px solid var(--border);border-radius:14px;padding:18px;
+    display:grid;grid-template-columns:180px 1fr;gap:18px;align-items:center;  /* iPad spacing fix */
+  }
+  @media (max-width:1024px){ .dayCard{grid-template-columns:160px 1fr} }  /* iPad portrait */
+  @media (max-width:720px){ .dayCard{grid-template-columns:1fr} }         /* Phone: stack */
+
+  /* LEFT: day + toggle, aligned and spaced */
+  .left{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;min-width:0;
+  }
+  .dayAbbr{font-weight:900;font-size:1.1rem;letter-spacing:.02em}
+
+  /* Custom switch */
+  .switch{position:relative;width:54px;height:30px;flex:0 0 54px}
+  .switch input{opacity:0;width:54px;height:30px;margin:0}
+  .track{
+    position:absolute;inset:0;border-radius:999px;background:#2b3297;border:1px solid #1d2370;
+    transition:background .2s ease,border-color .2s ease;
+  }
+  .thumb{
+    position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:999px;background:#fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);transition:left .2s ease,background .2s ease;
+  }
+  .switch input:checked ~ .track{background:#0ea05a;border-color:#0a7a45}
+  .switch input:checked ~ .thumb{left:27px;background:#fff}
+
+  /* RIGHT: high-contrast time fields that won't squeeze */
+  .right{display:grid;grid-template-columns:repeat(2, minmax(180px, 1fr));gap:14px}
+  @media (max-width:720px){ .right{grid-template-columns:1fr} }
+  .field{display:flex;flex-direction:column;gap:8px}
+  .flabel{font-size:.92rem;color:#e0e3ff;font-weight:700}
+  .time{
+    width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--input-border);
+    background:var(--input-bg); color:var(--input-text);
+    font-size:16px;min-height:44px;appearance:none;-webkit-appearance:none
+  }
+  .time:focus{outline:2px solid rgba(229,43,57,.25);border-color:#9aa3ff}
+
+  /* ===== Stock (iPad-friendly) ===== */
+  .toolRowWrap{position:sticky;top:0;z-index:10;margin:-16px -16px 12px -16px;padding:12px 16px;
+               background:rgba(11,18,71,.85);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);
+               border-top-left-radius:16px;border-top-right-radius:16px}
+  .toolRow{display:flex;gap:10px;flex-wrap:wrap}
+  .toolRow input{
+    padding:12px;border-radius:10px;border:1px solid #3941a2;background:#141a69;color:#fff;font-size:16px;min-height:44px;min-width:260px
+  }
+  .stockList{display:grid;gap:12px}
+  @media (min-width:820px){ .stockList{grid-template-columns:repeat(2, minmax(0, 1fr))} }
+  .itemCard{background:var(--softB);border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:10px}
+  .itemRow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}
+  .name{font-weight:800}
+  .soldToggle{
+    background:transparent;border:1px solid var(--border);color:#fff;border-radius:10px;padding:10px 14px;
+    font-weight:800;cursor:pointer;font-size:16px;min-height:44px
+  }
+  .soldToggle.on{background:#8a1e1e;border-color:#5d1212}
+  .qtyCtl{display:flex;align-items:center;gap:8px}
+  .qtyCtl button{
+    background:transparent;border:1px dashed #5760d6;color:#cbd0ff;border-radius:10px;padding:12px 16px;
+    font-size:16px;min-width:44px;min-height:44px
+  }
+  .qtyCtl span{min-width:40px;text-align:center;display:inline-block}
+  .manageBtn{
+    background:transparent;border:1px solid var(--border);color:#fff;border-radius:10px;padding:10px 14px;
+    font-weight:800;cursor:pointer;font-size:16px;min-height:44px;justify-self:end
+  }
+  .varBox{background:rgba(0,0,0,.05);border:1px solid var(--border);border-radius:12px;padding:10px;display:none}
+  .varTools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .varRow{
+    display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:rgba(0,0,0,.06);
+    padding:10px;border-radius:10px
+  }
+  .varRow + .varRow{margin-top:6px}
+
+  /* Toast */
+  .toast{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.95);opacity:0;z-index:4000;
+    background:#fff;color:#0b1247;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:16px 18px;
+    font-weight:900;min-width:260px;text-align:center;display:none
+  }
+  .toast.show{display:block;animation:toastIn .2s ease forwards}
+  @keyframes toastIn{to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ 
+  <nav class="tabs">
+    <button class="tab active" data-tab="hours">Opening Hours</button>
+    <button class="tab" data-tab="stock">Stock</button>
+  </nav>
+
+  <!-- ========== HOURS ========== -->
+  <section class="card" id="panel-hours">
+    <div class="statusRow">
+      <div id="openNow" class="badge">Status: —</div>
+      <button id="setAllClosed" class="ghost">Set All Closed</button>
+      <button id="setCopyWeek" class="ghost" title="Copy Monday times to all enabled days">Copy Mon → All</button>
+    </div>
+    <div class="hoursList" id="hoursList"></div>
+  </section>
+
+  <!-- ========== STOCK ========== -->
+  <section class="card" id="panel-stock" style="display:none">
+    <div class="toolRowWrap">
+      <div class="toolRow">
+        <input id="searchStock" placeholder="Search item or variation…" />
+        <button id="toggleAllIn" class="ghost">Mark All In Stock</button>
+        <button id="toggleAllOut" class="ghost">Mark All Sold Out</button>
+      </div>
+    </div>
+    <div class="stockList" id="stockList"></div>
+  </section>
+</div>
+
+<div class="toast" id="toast">Saved</div>
+
+<script>
+/* ===== Keys ===== */
+const HOURS_KEY='whapaxx_hours_v1';
+const STOCK_KEY='whapaxx_stock_v2';
+
+/* ===== Menu (for stock) ===== */
+const MENU=[
+  {id:'bajan-bom-bites',title:'Bajan Bom Bites'},
+  {id:'burger-royale',title:'Burger Royale'},
+  {id:'fries',title:'Fries'},
+  {id:'fries-a-la-whapaxx',title:'Fries a La Whapaxx',variations:['Bacon','Chicken','Fish']},
+  {id:'jumbo-dog-xp',title:'Jumbo Dog XP'},
+  {id:'mexi-frag-fries',title:'Mexi-Frag Fries',variations:['Bacon','Chicken','Fish']},
+  {id:'pizza-power-ups',title:'Pizza Power-Ups',variations:['Pepperoni','Ham','Pepperoni + Pineapple','Ham + Pineapple','All Cheese']},
+  {id:'snack-scroll-samosas',title:'Snack Scroll Samosas',variations:['Beef','Chicken','Sweet Chana','Vegetable']},
+  {id:'whapaxx-wing-raid',title:'Whapaxx Wing Raid',variations:['Honey Mustard Sauce','BBQ Sauce','Sweet n Sour Sauce','Spicy Garlic Aioli','Ketchup']},
+];
+
+/* ===== Tabs ===== */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelector('#panel-hours').style.display=(t.dataset.tab==='hours')?'':'none';
+  document.querySelector('#panel-stock').style.display=(t.dataset.tab==='stock')?'':'none';
+}));
+
+/* ===== Toast ===== */
+function toast(msg='Saved',ms=1000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
+
+/* ===== HOURS ===== */
+const defaultHours=[
+  {day:'Sun',enabled:false,open:'12:00',close:'20:00'},
+  {day:'Mon',enabled:true, open:'11:00',close:'21:00'},
+  {day:'Tue',enabled:true, open:'11:00',close:'21:00'},
+  {day:'Wed',enabled:true, open:'11:00',close:'21:00'},
+  {day:'Thu',enabled:true, open:'11:00',close:'21:00'},
+  {day:'Fri',enabled:true, open:'11:00',close:'23:00'},
+  {day:'Sat',enabled:true, open:'11:00',close:'23:00'},
+];
+function loadHours(){try{return JSON.parse(localStorage.getItem(HOURS_KEY))||defaultHours}catch{return defaultHours}}
+function saveHours(v){localStorage.setItem(HOURS_KEY,JSON.stringify(v));updateOpenNow();toast();}
+function isOpenNow(hours){
+  const now=new Date();
+  const idx=now.getDay(); // 0..6 => Sun..Sat; matches array ordering above
+  const t=hours[idx]; if(!t||!t.enabled) return false;
+  const [h1,m1]=t.open.split(':').map(Number),[h2,m2]=t.close.split(':').map(Number);
+  const s=new Date(now);s.setHours(h1,m1,0,0);const e=new Date(now);e.setHours(h2,m2,0,0);
+  return now>=s && now<=e;
+}
+function updateOpenNow(){
+  const badge=document.getElementById('openNow');
+  if(isOpenNow(loadHours())){badge.classList.add('ok');badge.classList.remove('warn');badge.textContent='Status: OPEN now';}
+  else {badge.classList.add('warn');badge.classList.remove('ok');badge.textContent='Status: CLOSED now';}
+}
+function renderHours(){
+  const list=document.getElementById('hoursList'); list.innerHTML='';
+  const hours=loadHours();
+
+  hours.forEach((row,idx)=>{
+    const card=document.createElement('div'); card.className='dayCard';
+    card.innerHTML=`
+      <div class="left">
+        <div class="dayAbbr">${row.day}</div>
+        <label class="switch" aria-label="${row.day} open/closed">
+          <input type="checkbox" ${row.enabled?'checked':''} />
+          <span class="track" aria-hidden="true"></span>
+          <span class="thumb" aria-hidden="true"></span>
+        </label>
+      </div>
+      <div class="right">
+        <div class="field">
+          <div class="flabel">Opens</div>
+          <input class="time" type="time" value="${row.open}" />
+        </div>
+        <div class="field">
+          <div class="flabel">Closes</div>
+          <input class="time" type="time" value="${row.close}" />
+        </div>
+      </div>
+    `;
+    const [chk,tOpen,tClose]=card.querySelectorAll('input');
+
+    chk.addEventListener('change',()=>{hours[idx].enabled=chk.checked;saveHours(hours);});
+    tOpen.addEventListener('change',()=>{hours[idx].open=tOpen.value||'00:00';saveHours(hours);});
+    tClose.addEventListener('change',()=>{hours[idx].close=tClose.value||'00:00';saveHours(hours);});
+
+    list.appendChild(card);
+  });
+
+  document.getElementById('setAllClosed').onclick=()=>{
+    const h=loadHours().map(d=>({...d,enabled:false}));
+    saveHours(h); renderHours();
+  };
+  document.getElementById('setCopyWeek').onclick=()=>{
+    const h=loadHours(), mon=h[1]; // Monday
+    const n=h.map((d,i)=> i===1 ? d : ({...d,enabled:mon.enabled,open:mon.open,close:mon.close}));
+    saveHours(n); renderHours();
+  };
+
+  updateOpenNow();
+}
+
+/* ===== STOCK ===== */
+function baseStockFromMenu(){return MENU.map(m=>({id:m.id,title:m.title,soldOut:false,qty:0,...(m.variations?{variations:m.variations.map(v=>({name:v,soldOut:false,qty:0}))}:{})}));}
+function loadStock(){let v=null;try{v=JSON.parse(localStorage.getItem(STOCK_KEY));}catch{} if(!Array.isArray(v)) v=baseStockFromMenu();
+  const byId=Object.fromEntries(v.map(x=>[x.id,x]));
+  return MENU.map(m=>{
+    const ex=byId[m.id]||{id:m.id,title:m.title,soldOut:false,qty:0};
+    const out={id:m.id,title:m.title,soldOut:!!ex.soldOut,qty:ex.qty||0};
+    if(m.variations&&m.variations.length){
+      const exVar=Array.isArray(ex.variations)?ex.variations:[];const map=Object.fromEntries(exVar.map(x=>[x.name,x]));
+      out.variations=m.variations.map(name=>{const r=map[name];return {name,soldOut:r?!!r.soldOut:false,qty:r?(r.qty||0):0};});
+    }
+    return out;
+  });
+}
+function saveStock(arr){localStorage.setItem(STOCK_KEY,JSON.stringify(arr));toast();}
+let stock=loadStock();
+
+function renderStock(){
+  stock=loadStock();
+  const list=document.getElementById('stockList');
+  const q=(document.getElementById('searchStock').value||'').trim().toLowerCase();
+  const filtered=stock.filter(s=>{
+    const a=s.title.toLowerCase().includes(q);
+    const b=(s.variations||[]).some(v=>v.name.toLowerCase().includes(q));
+    return !q||a||b;
+  });
+
+  list.innerHTML=''; filtered.sort((a,b)=>a.title.localeCompare(b.title));
+  filtered.forEach(item=>{
+    const card=document.createElement('div');card.className='itemCard';
+    const row=document.createElement('div');row.className='itemRow';
+    row.innerHTML=`
+      <div class="name">${item.title}</div>
+      <button class="soldToggle ${item.soldOut?'on':''}">${item.soldOut?'Sold Out':'In Stock'}</button>
+      <div class="qtyCtl"><button data-min>-</button><span data-val>${item.qty||0}</span><button data-plus>+</button></div>
+    `;
+    const varBox=document.createElement('div');varBox.className='varBox';
+    const btn=row.querySelector('.soldToggle');const v=row.querySelector('[data-val]');const plus=row.querySelector('[data-plus]');const min=row.querySelector('[data-min]');
+    btn.onclick=()=>{item.soldOut=!item.soldOut;btn.classList.toggle('on',item.soldOut);btn.textContent=item.soldOut?'Sold Out':'In Stock';saveStock(stock);};
+    plus.onclick=()=>{item.qty=(item.qty||0)+1;v.textContent=item.qty;saveStock(stock);};
+    min.onclick =()=>{item.qty=Math.max(0,(item.qty||0)-1);v.textContent=item.qty;saveStock(stock);};
+
+    if(Array.isArray(item.variations)&&item.variations.length){
+      const exp=document.createElement('button');exp.className='manageBtn';exp.textContent='Variations ▸';
+      exp.onclick=()=>{const open=varBox.style.display==='block'; if(open){varBox.style.display='none';exp.textContent='Variations ▸';return;}
+        renderVariations(item,varBox);varBox.style.display='block';exp.textContent='Variations ▾';};
+      card.appendChild(row);card.appendChild(exp);card.appendChild(varBox);
+    }else{card.appendChild(row);}
+    list.appendChild(card);
+  });
+
+  document.getElementById('toggleAllIn').onclick=()=>{stock.forEach(s=>{s.soldOut=false;(s.variations||[]).forEach(v=>v.soldOut=false);});saveStock(stock);renderStock();};
+  document.getElementById('toggleAllOut').onclick=()=>{stock.forEach(s=>{s.soldOut=true;(s.variations||[]).forEach(v=>v.soldOut=true);});saveStock(stock);renderStock();};
+}
+function renderVariations(item,mount){
+  mount.innerHTML='';
+  if(!Array.isArray(item.variations)||!item.variations.length){mount.innerHTML='<div class="sub" style="padding:8px;color:#c7c9e0">No variations for this item.</div>';return;}
+  const tools=document.createElement('div');tools.className='varTools';
+  tools.innerHTML=`<button class="ghost" data-in>All In Stock</button><button class="ghost" data-out>All Sold Out</button>`;
+  tools.querySelector('[data-in]').onclick=()=>{item.variations.forEach(v=>v.soldOut=false);saveStock(stock);renderVariations(item,mount);};
+  tools.querySelector('[data-out]').onclick=()=>{item.variations.forEach(v=>v.soldOut=true);saveStock(stock);renderVariations(item,mount);};
+  mount.appendChild(tools);
+  item.variations.forEach(v=>{
+    const r=document.createElement('div');r.className='varRow';
+    r.innerHTML=`<div class="name" style="font-weight:700">${v.name}</div>
+      <button class="soldToggle ${v.soldOut?'on':''}">${v.soldOut?'Sold Out':'In Stock'}</button>
+      <div class="qtyCtl"><button data-min>-</button><span data-val>${v.qty||0}</span><button data-plus>+</button></div>`;
+    const btn=r.querySelector('.soldToggle'); const val=r.querySelector('[data-val]');
+    r.querySelector('[data-plus]').onclick=()=>{v.qty=(v.qty||0)+1;val.textContent=v.qty;saveStock(stock);};
+    r.querySelector('[data-min]').onclick =()=>{v.qty=Math.max(0,(v.qty||0)-1);val.textContent=v.qty;saveStock(stock);};
+    btn.onclick=()=>{v.soldOut=!v.soldOut;btn.classList.toggle('on',v.soldOut);btn.textContent=v.soldOut?'Sold Out':'In Stock';saveStock(stock);};
+    mount.appendChild(r);
+  });
+}
+
+document.getElementById('searchStock').addEventListener('input',renderStock);
+
+/* ===== Init ===== */
+(function init(){
+  renderHours();
+  renderStock();
+  // persist current stock schema (ensures migration saved)
+  localStorage.setItem(STOCK_KEY, JSON.stringify(loadStock()));
+})();
+</script>
+</body>
+</html>

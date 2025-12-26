@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kitchen — All Lanes</title>
+<style>
+  :root{
+    --bg:#0b1247; --card:#1a1f5c; --text:#fff; --muted:#c7c9e0;
+    --accent:#1238bf; --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.25);
+    --lineA:rgba(255,255,255,.06); --lineB:rgba(255,255,255,.04);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;color:var(--text);
+    background:radial-gradient(1200px 600px at 10% -10%, #16217a 0%, #0b1247 60%), #0b1247;
+    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    padding:14px; padding-top:calc(14px + env(safe-area-inset-top));
+  }
+
+  .wrap{max-width:1400px;margin:0 auto;display:grid;gap:14px}
+  .pageTitle{margin:0 0 6px 0;font-size:1.2rem;font-weight:900}
+  .lanes{
+    display:grid; gap:12px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 980px){
+    .lanes{ grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  .lane{
+    background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;
+    display:flex; flex-direction:column; min-height:60vh;
+  }
+  .lane header{position:sticky; top:0; z-index:2; background:#182069;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; border-bottom:1px solid #2b3297}
+  .lane h2{margin:0; font-size:1rem}
+  .count{background:#111856; border:1px solid #2b3297; padding:4px 10px; border-radius:999px}
+
+  .list{padding:12px; display:grid; gap:10px}
+  .ticket{background:#121866; border:1px solid #2b3297; border-radius:14px; padding:10px}
+  .ticket h3{margin:0 0 6px}
+  .muted{color:var(--muted)}
+  .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:800; cursor:pointer}
+  .btn.alt{background:#0ea5e9}
+  .btn.ok{background:#10b981}
+  .empty{padding:18px; text-align:center; color:#c7c9e0}
+
+  /* Readable line items */
+  .lines{display:grid; gap:8px; margin-top:8px}
+  .lineItem{
+    display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px;
+    padding:10px; border-radius:12px;
+  }
+  .lineItem:nth-child(odd){background:var(--lineA)}
+  .lineItem:nth-child(even){background:var(--lineB)}
+  .prodTitle{font-weight:800; font-size:1.02rem}
+  .amt{font-weight:800}
+  .cond{grid-column:1/-1; color:var(--muted); margin-top:2px}
+  .addonTag{
+    grid-column:1/-1; display:inline-block; font-size:.8rem; background:#0f1a7a; border:1px solid #3039a4;
+    padding:2px 8px; border-radius:999px; margin-bottom:4px; color:#cbd0ff
+  }
+  .totalRow{
+    display:flex; justify-content:space-between; gap:8px; font-weight:900;
+    border-top:1px solid #2b3297; margin-top:10px; padding-top:8px; font-size:1.05rem
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+  
+    <section class="lanes">
+      <div class="lane" data-lane="Pending">
+        <header><h2>Pending</h2><span class="count" id="count-Pending">0</span></header>
+        <div class="list" id="list-Pending"></div>
+      </div>
+
+      <div class="lane" data-lane="Preparing">
+        <header><h2>Preparing</h2><span class="count" id="count-Preparing">0</span></header>
+        <div class="list" id="list-Preparing"></div>
+      </div>
+
+      <div class="lane" data-lane="Ready">
+        <header><h2>Ready</h2><span class="count" id="count-Ready">0</span></header>
+        <div class="list" id="list-Ready"></div>
+      </div>
+    </section>
+  </div>
+
+<script>
+const ORDERS_KEY='whapaxx_orders_v2';
+function load(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY))||[] }catch{ return [] } }
+function save(a){ localStorage.setItem(ORDERS_KEY, JSON.stringify(a)); }
+function money(n){ return '$'+(Math.round(n*100)/100).toFixed(2); }
+
+/* Shared item-line renderer (matches Admin & Customer) */
+function lineHTML(i){
+  const title = `<div class="prodTitle">${i.title} × ${i.qty}${i.variation?` <span class="muted">(${i.variation})</span>`:''}</div>`;
+  const cond  = (i.perItem && Array.isArray(i.perItem.condiments) && i.perItem.condiments.length)
+              ? `<div class="cond"><strong>Condiments:</strong> ${i.perItem.condiments.join(', ')}</div>` : '';
+  const tag   = i.kind==='addon' ? `<span class="addonTag">Addon</span>` : '';
+  return `<div class="lineItem">${tag}${title}<div class="amt">${money((i.unitPrice||0)*(i.qty||0))}</div>${cond}</div>`;
+}
+
+const lists = {
+  Pending:  document.getElementById('list-Pending'),
+  Preparing:document.getElementById('list-Preparing'),
+  Ready:    document.getElementById('list-Ready'),
+};
+const counts = {
+  Pending:  document.getElementById('count-Pending'),
+  Preparing:document.getElementById('count-Preparing'),
+  Ready:    document.getElementById('count-Ready'),
+};
+
+function render(){
+  const orders = load().filter(o=>['Pending','Preparing','Ready'].includes(o.status));
+  // sort by time they entered the lane (approved_at for Pending; preparing_at; ready_at)
+  orders.sort((a,b)=>{
+    const ta = a.ready_at || a.preparing_at || a.approved_at || a.created_at || '';
+    const tb = b.ready_at || b.preparing_at || b.approved_at || b.created_at || '';
+    return ta.localeCompare(tb);
+  });
+
+  // clear lanes
+  Object.values(lists).forEach(el => el.innerHTML='');
+  const tally = {Pending:0, Preparing:0, Ready:0};
+
+  for(const o of orders){
+    const lines=(o.items||[]).map(lineHTML).join('');
+    const card=document.createElement('div');
+    card.className='ticket';
+    card.innerHTML=`
+      <h3><strong>Order #:</strong> ${o.orderNumber || o.id.slice(0,6)} &nbsp; <strong>Buzzer:</strong> ${o.buzzer || '—'}</h3>
+      <div class="muted">Customer: ${o.customer || '—'} • ${o.status}</div>
+      <div class="lines">${lines}</div>
+      <div class="totalRow"><div>Total</div><div>${money(o.total||0)}</div></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        ${o.status==='Pending'   ? `<button class="btn alt" data-next="Preparing" data-id="${o.id}">Start Preparing</button>` : ''}
+        ${o.status==='Preparing' ? `<button class="btn ok"  data-next="Ready"     data-id="${o.id}">Mark Ready</button>` : ''}
+      </div>
+    `;
+    card.querySelectorAll('button[data-next]').forEach(b=>{
+      b.addEventListener('click',()=>advance(o.id, b.dataset.next));
+    });
+
+    lists[o.status].appendChild(card);
+    tally[o.status]++;
+  }
+
+  // empty states & counts
+  ['Pending','Preparing','Ready'].forEach(k=>{
+    if(!lists[k].children.length){
+      lists[k].innerHTML = `<div class="empty">No ${k.toLowerCase()} orders.</div>`;
+    }
+    counts[k].textContent = tally[k] || 0;
+  });
+}
+
+function advance(id,to){
+  const arr=load();
+  const o=arr.find(x=>x.id===id);
+  if(!o) return;
+  if(to==='Preparing'){ o.status='Preparing'; o.preparing_at = new Date().toISOString(); }
+  else if(to==='Ready'){ o.status='Ready';     o.ready_at     = new Date().toISOString(); }
+  save(arr);
+  render();
+}
+
+/* Live updates from Admin tab */
+let t=null;
+window.addEventListener('storage', e=>{
+  if(e.key===ORDERS_KEY){
+    clearTimeout(t); t=setTimeout(render, 120);
+  }
+});
+
+render();
+</script>
+</body>
+</html>

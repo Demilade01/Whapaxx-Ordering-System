@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Approval — Dispatch</title>
+<style>
+  :root{
+    --bg:#0b1247; --card:#1a1f5c; --text:#fff; --muted:#c7c9e0;
+    --accent:#1238bf; --ok:#10b981; --warn:#f59e0b; --danger:#ef4444; --alt:#0ea5e9;
+    --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.25); --border:#2b3297;
+    --lineA:rgba(255,255,255,.06); --lineB:rgba(255,255,255,.04);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:radial-gradient(1200px 600px at 10% -10%, #16217a 0%, #0b1247 60%), #0b1247;color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    padding:14px; padding-top:calc(14px + env(safe-area-inset-top));
+  }
+  .wrap{max-width:1400px;margin:0 auto;display:grid;gap:12px}
+
+  /* Tabs */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tab{background:#111856;border:1px solid var(--border);color:#fff;padding:10px 14px;border-radius:999px;cursor:pointer;font-weight:800}
+  .tab.active{background:#fff;color:#0b1247;border-color:#fff}
+
+  .card{background:#1a1f5c;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .head{padding:16px 14px;border-bottom:1px solid var(--border)}
+  .head h1{margin:0;font-size:1.25rem}
+  .hint{color:var(--muted);margin-top:6px}
+  .controls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  input[type="search"], select{
+    flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid #3941a2;background:#141a69;color:#fff;font-size:16px
+  }
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:10px 12px;font-weight:800;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px dashed #5a61c9;color:#cbd0ff}
+  .btn.alt{background:var(--alt)}
+  .btn.warn{background:var(--danger)}
+  .btn.ok{background:var(--ok)}
+  .btn.small{padding:8px 10px;font-size:14px;border-radius:10px}
+
+  .empty{padding:18px;text-align:center;color:#c7c9e0}
+
+  /* Item lines */
+  .lines{display:grid;gap:8px;margin-top:8px}
+  .lineItem{
+    display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px;border-radius:12px
+  }
+  .lineItem:nth-child(odd){background:var(--lineA)}
+  .lineItem:nth-child(even){background:var(--lineB)}
+  .prodTitle{font-weight:800;font-size:1.02rem}
+  .amt{font-weight:800}
+  .cond{grid-column:1/-1;color:var(--muted);margin-top:2px}
+  .addonTag{grid-column:1/-1;display:inline-block;font-size:.8rem;background:#0f1a1a;border:1px solid #6b1a1a;
+            padding:2px 8px;border-radius:999px;margin-bottom:4px;color:#ffdede}
+  .totalRow{display:flex;justify-content:space-between;gap:8px;font-weight:900;border-top:1px solid var(--border);margin-top:10px;padding-top:8px;font-size:1.05rem}
+
+  .order{background:#171c63;border:1px solid var(--border);border-radius:14px;padding:12px}
+  .order h3{margin:0 0 6px}
+  .muted{color:var(--muted)}
+  .tag{display:inline-block;padding:4px 8px;border-radius:999px;font-weight:800}
+  .tag.submitted{background:#3b82f6}
+  .tag.pending{background:#f59e0b}
+  .tag.preparing{background:#22c55e}
+  .tag.ready{background:#a78bfa}
+  .tag.rejected{background:#ef4444}
+
+  /* BOARD LAYOUT with Approvals column first */
+  .boardWrap{padding:10px}
+  .boardGrid{
+    display:grid; gap:12px;
+    grid-template-columns:1fr;
+  }
+  @media (min-width: 1100px){
+    .boardGrid{grid-template-columns:repeat(4, 1fr);}
+  }
+  .colHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .colHead h2{margin:0;font-size:1.05rem}
+  .colList{display:grid;gap:10px}
+
+  /* Buzzer pool */
+  .pool{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .bz{padding:4px 8px;border-radius:999px;border:1px solid #3941a2}
+  .bz.free{background:#0e6f3b}
+  .bz.used{background:#8a1a1a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="tabs">
+    <button class="tab active" id="tab-board">Board</button>
+    <button class="tab" id="tab-rejected">Rejected</button>
+    <button class="tab" id="tab-archive">Archive</button>
+  </nav>
+
+  <!-- BOARD (Approvals + Pending + Preparing + Ready) -->
+  <section id="view-board" class="card">
+      <div class="controls">
+        <input id="qBoard" type="search" placeholder="Search name / order # / buzzer / item…" />
+        <select id="fBoard">
+          <option value="">All</option>
+          <option>Submitted</option>
+          <option>Pending</option>
+          <option>Preparing</option>
+          <option>Ready</option>
+        </select>
+        <button id="refreshBoard" class="btn ghost" type="button">Refresh</button>
+      </div>
+      <div class="hint" id="buzzerSummary" style="margin-top:10px"></div>
+      <div class="pool" id="buzzerPool"></div>
+    </div>
+    <div class="boardWrap">
+      <div class="boardGrid">
+        <div>
+          <div class="colHead"><h2>Approvals</h2></div>
+          <div id="colApprovals" class="colList"></div>
+        </div>
+        <div>
+          <div class="colHead"><h2>Pending</h2></div>
+          <div id="colPending" class="colList"></div>
+        </div>
+        <div>
+          <div class="colHead"><h2>Preparing</h2></div>
+          <div id="colPreparing" class="colList"></div>
+        </div>
+        <div>
+          <div class="colHead"><h2>Ready</h2></div>
+          <div id="colReady" class="colList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REJECTED -->
+  <section id="view-rejected" class="card" style="display:none">
+    <div class="head">
+      <h1>Rejected</h1>
+      <div class="hint">You can move an order back to Approvals.</div>
+      <div class="controls">
+        <input id="qRejected" type="search" placeholder="Search name or item…" />
+        <button id="refreshRejected" class="btn ghost" type="button">Refresh</button>
+      </div>
+    </div>
+    <div id="listRejected" class="boardWrap"></div>
+  </section>
+
+  <!-- ARCHIVE -->
+  <section id="view-archive" class="card" style="display:none">
+    <div class="head">
+      <h1>Archive</h1>
+      <div class="hint">Orders move here after collection. “Save Sales Report” exports CSV (supports iOS Share → Files).</div>
+      <div class="controls">
+        <select id="ageFilter">
+          <option value="all">All time</option>
+          <option value="24h">Last 24h</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+        <input id="qArchive" type="search" placeholder="Search name / order # / item…" />
+        <button id="saveReportBtn" class="btn" type="button">Save Sales Report</button>
+        <button id="refreshArchive" class="btn ghost" type="button">Refresh</button>
+      </div>
+    </div>
+    <div id="listArchive" class="boardWrap"></div>
+  </section>
+</div>
+
+<script>
+/* ===== Shared Storage & Utils ===== */
+const ORDERS_KEY='whapaxx_orders_v2';
+const ARCHIVE_KEY='whapaxx_orders_archive_v1';
+
+const $=s=>document.querySelector(s);
+const money=n=>'$'+(Math.round(n*100)/100).toFixed(2);
+const nowISO=()=>new Date().toISOString();
+
+function loadActive(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY))||[] }catch{ return [] } }
+function saveActive(arr){ localStorage.setItem(ORDERS_KEY, JSON.stringify(arr)); }
+function loadArchive(){ try{ return JSON.parse(localStorage.getItem(ARCHIVE_KEY))||[] }catch{ return [] } }
+function saveArchive(arr){ localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr)); }
+
+/* Unique order # and buzzer assignment */
+function uniqueOrderNumber(all){
+  let tries=0;
+  while(tries<10000){
+    const n=Math.floor(10000+Math.random()*90000);
+    if(!all.some(o=>String(o.orderNumber||'')===String(n))) return n;
+    tries++;
+  }
+  return Number(String(Date.now()).slice(-5));
+}
+function computeBuzzerPool(all){
+  const TOTAL=24;
+  const inUse=new Set(all.filter(o=>['Pending','Preparing','Ready'].includes(o.status))
+    .map(o=>Number(o.buzzer)).filter(n=>Number.isFinite(n)));
+  const free=[]; for(let b=1;b<=TOTAL;b++) if(!inUse.has(b)) free.push(b);
+  return {inUse,free,total:TOTAL};
+}
+function firstAvailableBuzzer(all){ const p=computeBuzzerPool(all); return p.free.length?p.free[0]:null; }
+
+/* Reusable line renderer */
+function lineHTML(i){
+  const title=`<div class="prodTitle">${i.title} × ${i.qty}${i.variation?` <span class="muted">(${i.variation})</span>`:''}</div>`;
+  const cond=(i.perItem && Array.isArray(i.perItem.condiments) && i.perItem.condiments.length)
+    ? `<div class="cond"><strong>Condiments:</strong> ${i.perItem.condiments.join(', ')}</div>` : '';
+  const tag = i.kind==='addon' ? `<span class="addonTag">Addon</span>` : '';
+  return `<div class="lineItem">${tag}${title}<div class="amt">${money((i.unitPrice||0)*(i.qty||0))}</div>${cond}</div>`;
+}
+
+/* ===== Tabs ===== */
+const tabBoard=$('#tab-board'), tabRejected=$('#tab-rejected'), tabArchive=$('#tab-archive');
+const viewBoard=$('#view-board'), viewRejected=$('#view-rejected'), viewArchive=$('#view-archive');
+
+function setTab(which){
+  [tabBoard,tabRejected,tabArchive].forEach(b=>b.classList.remove('active'));
+  [viewBoard,viewRejected,viewArchive].forEach(v=>v.style.display='none');
+  if(which==='board'){ tabBoard.classList.add('active'); viewBoard.style.display='block'; renderBoard(); }
+  if(which==='rejected'){ tabRejected.classList.add('active'); viewRejected.style.display='block'; renderRejected(); }
+  if(which==='archive'){ tabArchive.classList.add('active'); viewArchive.style.display='block'; renderArchive(); }
+}
+tabBoard.onclick=()=>setTab('board');
+tabRejected.onclick=()=>setTab('rejected');
+tabArchive.onclick=()=>setTab('archive');
+
+/* ===== Board (Approvals + columns) ===== */
+const qBoard=$('#qBoard'), fBoard=$('#fBoard');
+const colApprovals=$('#colApprovals'), colPending=$('#colPending'), colPreparing=$('#colPreparing'), colReady=$('#colReady');
+const buzzerSummary=$('#buzzerSummary'), buzzerPool=$('#buzzerPool');
+$('#refreshBoard').onclick=renderBoard; qBoard.oninput=renderBoard; fBoard.onchange=renderBoard;
+
+function approvalsCardHTML(o){
+  const lines=(o.items||[]).map(lineHTML).join('');
+  return `
+    <div class="order">
+      <h3><strong>Order #:</strong> — &nbsp; <strong>Buzzer:</strong> — &nbsp; <span class="tag submitted">Submitted</span></h3>
+      <div class="muted">Customer: ${o.customer||'—'} • Created ${o.created_at?new Date(o.created_at).toLocaleTimeString():''}</div>
+      <div class="lines">${lines}</div>
+      <div class="totalRow"><div>Total</div><div>${money(o.total||0)}</div></div>
+      <div class="controls" style="margin-top:10px">
+        <button class="btn ok" data-approve data-id="${o.id}">Approve</button>
+        <button class="btn warn" data-reject data-id="${o.id}">Reject</button>
+      </div>
+    </div>`;
+}
+function boardCardHTML(o){
+  const lines=(o.items||[]).map(lineHTML).join('');
+  const collectedBtn = o.status==='Ready' ? `<button class="btn small ok" data-collected data-id="${o.id}">Mark Collected (Archive)</button>` : '';
+  return `
+    <div class="order">
+      <h3><strong>#${o.orderNumber||'—'}</strong> • Buzzer: <strong>${o.buzzer||'—'}</strong> &nbsp;
+          <span class="tag ${o.status.toLowerCase()}">${o.status}</span></h3>
+      <div class="muted">Customer: ${o.customer||'—'}${o.approved_at?` • Approved ${new Date(o.approved_at).toLocaleTimeString()}`:''}</div>
+      <div class="lines">${lines}</div>
+      <div class="totalRow"><div>Total</div><div>${money(o.total||0)}</div></div>
+      <div class="controls" style="margin-top:10px">
+        <button class="btn small alt" data-revert data-id="${o.id}">Revert</button>
+        ${collectedBtn}
+      </div>
+    </div>`;
+}
+
+function renderBoard(){
+  const q=(qBoard.value||'').trim().toLowerCase();
+  const filt=fBoard.value;
+  const all=loadActive();
+
+  // Buzzer pool
+  const pool=computeBuzzerPool(all);
+  buzzerSummary.textContent=`Buzzers free: ${pool.free.length}/${pool.total}`;
+  buzzerPool.innerHTML=''; for(let b=1;b<=pool.total;b++){
+    const used=pool.inUse.has(b);
+    const s=document.createElement('span'); s.className=`bz ${used?'used':'free'}`; s.textContent=`#${b}`;
+    buzzerPool.appendChild(s);
+  }
+
+  const orders=all
+    .filter(o=>{
+      const txt=[o.customer,o.orderNumber,o.buzzer,...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
+      const matchQ=!q || txt.includes(q);
+      const matchF=!filt || o.status===filt;
+      return matchQ && matchF;
+    })
+    .sort((a,b)=> (a.approved_at||a.created_at||'').localeCompare(b.approved_at||b.created_at||''));
+
+  const A=orders.filter(o=>o.status==='Submitted');
+  const P=orders.filter(o=>o.status==='Pending');
+  const G=orders.filter(o=>o.status==='Preparing');
+  const R=orders.filter(o=>o.status==='Ready');
+
+  colApprovals.innerHTML = A.length ? A.map(approvalsCardHTML).join('') : '<div class="empty">No approvals.</div>';
+  colPending.innerHTML   = P.length ? P.map(boardCardHTML).join('') : '<div class="empty">No Pending orders.</div>';
+  colPreparing.innerHTML = G.length ? G.map(boardCardHTML).join('') : '<div class="empty">No Preparing orders.</div>';
+  colReady.innerHTML     = R.length ? R.map(boardCardHTML).join('') : '<div class="empty">No Ready orders.</div>';
+
+  // Wire Approvals buttons
+  colApprovals.querySelectorAll('[data-approve]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.getAttribute('data-id'); const arr=loadActive(); const o=arr.find(x=>x.id===id); if(!o) return;
+      const bz=firstAvailableBuzzer(arr);
+      if(bz===null){ alert('All 24 buzzers are in use. Archive some READY orders or wait.'); return; }
+      o.orderNumber=uniqueOrderNumber(arr);
+      o.buzzer=bz;
+      o.status='Pending';
+      o.approved_at=nowISO();
+      saveActive(arr); renderBoard();
+    };
+  });
+  colApprovals.querySelectorAll('[data-reject]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.getAttribute('data-id'); const arr=loadActive(); const o=arr.find(x=>x.id===id); if(!o) return;
+      if(!confirm('Reject this order?')) return;
+      o.status='Rejected'; o.orderNumber=null; o.buzzer=null; saveActive(arr); renderBoard();
+    };
+  });
+
+  // Wire board actions: Revert + Collected(Archive)
+  document.querySelectorAll('[data-revert]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.getAttribute('data-id'); const arr=loadActive(); const o=arr.find(x=>x.id===id); if(!o) return;
+      if(o.status==='Preparing'){ o.status='Pending'; }
+      else if(o.status==='Ready'){ o.status='Preparing'; }
+      else { // Pending -> Approvals
+        o.status='Submitted'; o.orderNumber=null; o.buzzer=null;
+      }
+      saveActive(arr); renderBoard();
+    };
+  });
+  document.querySelectorAll('[data-collected]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.getAttribute('data-id'); const active=loadActive(); const o=active.find(x=>x.id===id); if(!o) return;
+      if(o.status!=='Ready'){ alert('Only READY orders can be archived.'); return; }
+      o.collected_at=nowISO();
+      const archive=loadArchive();
+      archive.push({...o, archived_at: nowISO(), status_at_archive:'Collected'});
+      saveArchive(archive);
+      const idx=active.findIndex(x=>x.id===id); if(idx>-1) active.splice(idx,1);
+      saveActive(active);
+      renderBoard();
+      if(viewArchive.style.display!=='none') renderArchive();
+    };
+  });
+}
+
+/* ===== Rejected ===== */
+const qRejected=$('#qRejected'), listRejected=$('#listRejected');
+$('#refreshRejected').onclick=renderRejected; qRejected && (qRejected.oninput=renderRejected);
+
+function renderRejected(){
+  const q=(qRejected?.value||'').trim().toLowerCase();
+  const orders=loadActive().filter(o=>o.status==='Rejected')
+    .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  listRejected.innerHTML='';
+  const filtered=orders.filter(o=>{
+    const txt=[o.customer,...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
+    return !q||txt.includes(q);
+  });
+  if(!filtered.length){ listRejected.innerHTML='<div class="empty">No rejected orders.</div>'; return; }
+  const stack=document.createElement('div'); stack.style.display='grid'; stack.style.gap='10px';
+  for(const o of filtered){
+    const lines=(o.items||[]).map(lineHTML).join('');
+    const div=document.createElement('div'); div.className='order';
+    div.innerHTML=`
+      <h3><strong>Order #:</strong> — &nbsp; <strong>Buzzer:</strong> — &nbsp; <span class="tag rejected">Rejected</span></h3>
+      <div class="muted">Customer: ${o.customer||'—'} • Created ${o.created_at?new Date(o.created_at).toLocaleTimeString():''}</div>
+      <div class="lines">${lines}</div>
+      <div class="totalRow"><div>Total</div><div>${money(o.total||0)}</div></div>
+      <div class="controls" style="margin-top:10px">
+        <button class="btn alt" data-restore data-id="${o.id}">Move Back to Approvals</button>
+      </div>`;
+    div.querySelector('[data-restore]').onclick=()=>{
+      const arr=loadActive(); const x=arr.find(xx=>xx.id===o.id); if(!x) return;
+      x.status='Submitted'; x.orderNumber=null; x.buzzer=null; saveActive(arr); renderRejected();
+    };
+    stack.appendChild(div);
+  }
+  listRejected.appendChild(stack);
+}
+
+/* ===== Archive ===== */
+const ageFilter=$('#ageFilter'), qArchive=$('#qArchive'), listArchive=$('#listArchive');
+$('#refreshArchive').onclick=renderArchive; qArchive.oninput=renderArchive; ageFilter.onchange=renderArchive;
+$('#saveReportBtn').onclick=saveSalesReport;
+
+function withinAge(ts, filt){
+  if (filt==='all') return true;
+  const t = ts ? new Date(ts).getTime() : 0, now = Date.now();
+  if (filt==='24h') return now - t <= 24*3600*1000;
+  if (filt==='7d')  return now - t <= 7*24*3600*1000;
+  if (filt==='30d') return now - t <= 30*24*3600*1000;
+  return true;
+}
+function renderArchive(){
+  const q=(qArchive.value||'').trim().toLowerCase();
+  const age=ageFilter.value;
+  const arr=loadArchive().filter(o=>withinAge(o.archived_at, age))
+    .sort((a,b)=>(b.archived_at||'').localeCompare(a.archived_at||''));
+  listArchive.innerHTML='';
+  const filtered=arr.filter(o=>{
+    const txt=[o.customer,o.orderNumber,o.buzzer,...(o.items||[]).map(i=>i.title)].join(' ').toLowerCase();
+    return !q||txt.includes(q);
+  });
+  if(!filtered.length){ listArchive.innerHTML='<div class="empty">No archived orders.</div>'; return; }
+  const stack=document.createElement('div'); stack.style.display='grid'; stack.style.gap='10px';
+  for(const o of filtered){
+    const lines=(o.items||[]).map(lineHTML).join('');
+    const div=document.createElement('div'); div.className='order';
+    div.innerHTML=`
+      <h3><strong>Order #:</strong> ${o.orderNumber||'—'} &nbsp; <strong>Buzzer (at archive):</strong> ${o.buzzer??'—'} &nbsp; <span class="tag ready">Archived</span></h3>
+      <div class="muted">Customer: ${o.customer||'—'} • Collected ${o.collected_at?new Date(o.collected_at).toLocaleTimeString():''} • Archived ${o.archived_at?new Date(o.archived_at).toLocaleTimeString():''}</div>
+      <div class="lines">${lines}</div>
+      <div class="totalRow"><div>Total</div><div>${money(o.total||0)}</div></div>`;
+    stack.appendChild(div);
+  }
+  listArchive.appendChild(stack);
+}
+
+/* Sales report (CSV) */
+function buildSalesCSV(){
+  const rows=[];
+  rows.push(['archived_at','collected_at','order_number','customer','status_at_archive','buzzer','item','variation','qty','unit_price','line_total','order_total']);
+  const arr=loadArchive();
+  for(const o of arr){
+    const total=o.total||0;
+    const base=[o.archived_at||'', o.collected_at||'', o.orderNumber||'', o.customer||'', (o.status_at_archive||o.status||'Collected'), (o.buzzer??'')];
+    if(Array.isArray(o.items)){
+      for(const it of o.items){
+        const lineTotal=(it.unitPrice||0)*(it.qty||0);
+        rows.push([...base, it.title||'', it.variation||'', it.qty||0, it.unitPrice||0, lineTotal, total]);
+      }
+    }else{ rows.push([...base,'','','','','',total]); }
+  }
+  return rows.map(r=>r.map(v=>String(v).replaceAll('"','""')).map(v=>`"${v}"`).join(',')).join('\n');
+}
+function saveSalesReport(){
+  const csv=buildSalesCSV();
+  const stamp=new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  const filename=`whapaxx-sales-report-${stamp}.csv`;
+  try{
+    const blob=new Blob([csv],{type:'text/csv'});
+    const supportsShare = typeof navigator!=='undefined' && navigator.canShare && (()=>{try{
+      const f=new File([blob], filename, {type:'text/csv'}); return navigator.canShare({files:[f]});
+    }catch{return false}})();
+    if(supportsShare){
+      const file=new File([blob], filename, {type:'text/csv'});
+      navigator.share({title:'Sales Report', text:'Save to Files (iCloud Drive).', files:[file]});
+      return;
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename; a.style.display='none';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),0);
+    alert('Sales report download started.');
+  }catch(e){
+    console.error(e);
+    const dataUrl='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    const w=window.open(dataUrl,'_blank'); if(!w) window.location.href=dataUrl;
+  }
+}
+
+/* Cross-tab updates */
+let t=null;
+window.addEventListener('storage',e=>{
+  if(e.key===ORDERS_KEY || e.key===ARCHIVE_KEY){
+    clearTimeout(t);
+    t=setTimeout(()=>{
+      if(viewBoard.style.display!=='none') renderBoard();
+      if(viewRejected.style.display!=='none') renderRejected();
+      if(viewArchive.style.display!=='none') renderArchive();
+    },120);
+  }
+});
+
+/* First paint */
+setTab('board');
+</script>
+</body>
+</html>
